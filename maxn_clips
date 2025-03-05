@@ -1,0 +1,297 @@
+##This code is for extracting video snippets for:
+###1) every MaxN point from video data annotated using EventMeasure software 
+###2) a representative clip @15mins into each video.
+##Code prepared by jacquomo.monk@utas.edu.au and justin.hulls@utas.edu.au
+  
+  ## Load relevant packages
+  library(tidyverse)
+  library(readxl)
+  library(lubridate)
+  # library(stringr)
+  
+  #Also requies FFmpeg to installed on your machine (https://www.ffmpeg.org/download.html)
+  
+  ##1.0 House keeping
+  ###1.1 Set working directory
+  setwd('R:/TAFI/Data/CERF/BRUVS Video/202107_Freycinet')
+  
+  ###1.2 Read the EventMeasure Points file to get time points to extract MaxN video snippets for each species
+  EM_data <- read.table("EM_Data/EM Outputs/GlobalArchive/Freycinet_202108_Points.txt", 
+                        header = TRUE, 
+                        sep = "\t")
+  
+  ###1.3 Read the metadata for outputting later
+  meta <- read.csv("EM_Data/EM Outputs/GlobalArchive/Freycinet_202108_Metadata.csv", 
+                        header = TRUE)
+  
+  ###1.4 set campaign id (same one as used in GlobalArchive)
+  campaign <- "202107_Freycient_AMP"
+  
+  ##2.0 Get frame rates from videos in directory
+  ###2.1 Define the directory containing your videos
+  video_dir <- "R:/TAFI/Data/CERF/BRUVS Video/202107_Freycinet/Converted"
+  
+  ###2.2 List all MP4 files in the directory
+  video_files <- list.files(video_dir, pattern = "\\.MP4$", full.names = TRUE)
+  
+  
+  ###2.3 Function to get video fps using ffprobe
+  get_video_fps <- function(video_path) {
+    command <- paste("ffprobe -i", shQuote(video_path), 
+                     "-show_entries stream=r_frame_rate -v quiet -of csv=\"p=0\"")
+    fps <- system(command, intern = TRUE)  # Run the command and capture the output
+    # Extract the fps from the output, which is in the form 'numerator/denominator'
+    fps_values <- as.numeric(unlist(strsplit(fps, "/")))
+    fps_rate <- fps_values[1] / fps_values[2]  # Calculate the fps
+    return(fps_rate)  # Return the frames per second
+  }
+  
+  ###2.4 Create a table with video names and their fps
+  fps_table <- data.frame(Video = video_files, FPS = sapply(video_files, get_video_fps))%>%
+    mutate(Filename = basename(Video))%>%
+    glimpse()
+  
+  ##3.0 Calculate MaxN
+  MaxN <- EM_data %>%
+    mutate(
+      Genus = ifelse(Genus == "", Family, Genus), # Replace empty Genus with Family
+      Scientific = paste(Genus, Species, sep = " ") # Combine Genus and Species
+    ) %>%
+    group_by(Filename, Scientific, Frame) %>%         # Group by Filename, Scientific name, and Time
+    dplyr::mutate(Number = as.numeric(Number)) %>%
+    dplyr::summarise(maxn = sum(Number)) %>%         # Summarize the maximum number for each group
+    dplyr::ungroup() %>%
+    dplyr::group_by(Filename, Scientific) %>%
+    dplyr::slice(which.max(maxn)) %>%                # Keep the row with the max value for each species
+    dplyr::ungroup() %>%
+    arrange(Filename, Scientific, Frame) %>%          # Sort by Filename, Scientific, and Time
+    left_join(fps_table, by= join_by(Filename))%>%
+    mutate(
+      Time_in_seconds = Frame/FPS, # Convert Frames to seconds 
+      clip_start_in_seconds = (round(Time_in_seconds - 10)),  # Start 10 seconds before MaxN
+      clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
+    ) %>%
+    filter(Scientific != " ") %>%                     # Filter out empty scientific names
+    glimpse()
+  
+  
+  
+  ##4.0 Join MaxN and video files to get the path
+  combined <- as.data.frame(video_files) %>%
+    mutate(Filename = str_extract(video_files, "[^/]+$")) %>%
+    right_join(MaxN, by = "Filename") %>%             # Right join to ensure all MaxN rows are kept
+    mutate(Site = str_extract(Filename, "\\b(?:\\d+_\\d+|EXP_\\d+)\\b")) %>%     # Extract 'Site' (matches patterns like "EXP_2" or "1_1")
+    glimpse()
+  
+  ##5.0 Setup output folder and path 
+  #Ensure the output directory exists
+  output_dir <- "R:/TAFI/Data/CERF/BRUVS Video/202107_Freycinet/Highlight Videos/Clips"
+  # output_dir <- "C:/temp1/Clips"
+    if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  ##6.0 Iterate over each row of 'combined' to process the video clips
+  for (i in 1:nrow(combined)) {
+    
+    # Get the video file path and name
+    video_file <- combined$Filename[i]
+    video_full_path <- file.path(video_dir, video_file)  # Correct path construction
+    
+    # Check if the file exists (to avoid errors)
+    if (!file.exists(video_full_path)) {
+      cat("File not found:", video_full_path, "\n")
+      next  # Skip to next iteration if file doesn't exist
+    }
+    
+    # Get the start time for the clip
+    clip_start_time <- combined$clip_start_in_seconds[i]
+    
+    # Generate the output video file name using the format: Filename_Scientific_Time.mp4
+    clean_video_file <- gsub("\\.MP4", "", video_file)  # Remove ".MP4" from the filename
+    
+    # Ensure Scientific name is clean (remove unwanted characters or NAs)
+    clean_scientific_name <- gsub("[^[:alnum:]_]", "_", combined$Scientific[i])
+    if (is.na(clean_scientific_name) | clean_scientific_name == "") {
+      clean_scientific_name <- "Unknown_Species"
+    }
+    
+    # Use Time to ensure a unique filename
+    output_video_name <- paste0(campaign,"_",clean_video_file, "_", clean_scientific_name, "_", round(combined$Time[i],2), ".MP4")
+    output_video_path <- file.path(output_dir, output_video_name)
+    
+    # Create the FFmpeg command for video clip extraction
+    ffmpeg_command <- paste0(
+      "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",  # Input video file
+      " -ss ", clip_start_time,               # Start time for the clip
+      " -an ",                              # Exclude audio
+      " -t 30 ",                              # Duration of the clip (30 seconds)
+      " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings cf ranges from 0-51 with lower better. 17-18 is visually lossless, but large file size. 19-23 good for most general uses
+      "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
+    )
+    
+    # Execute the FFmpeg command and capture the output
+    cat("Running: ", ffmpeg_command, "\n")
+    ffmpeg_output <- system(ffmpeg_command, intern = TRUE)
+    
+    # Print the ffmpeg output for debugging
+    cat(ffmpeg_output, sep = "\n")
+    
+    # Check if the output file was created and has a valid size
+    if (file.exists(output_video_path) && file.info(output_video_path)$size > 1024) {
+      cat("Successfully created:", output_video_path, "\n")
+    } else {
+      cat("Failed to create a valid output file:", output_video_path, "\n")
+    }
+  }
+
+  
+  ##7.0 Now lets extract representative clips @10000 (5.4 mins into video) frames in based on second videos from GoPros. 
+  #### If you video files are a single video per drop you may want to edit this part of the code
+ 
+  ##8.0 Filter combined data so that you are only working with second video files
+  ###8.1 Set up number of frames into the video you want and convert to seconds
+  combined_sec <- combined%>%
+    filter(str_detect(Filename, "_2\\.MP4")) %>%  # Filter based on 2 video only
+    mutate(Site = str_extract(Filename, "\\b(?:\\d+_\\d+|EXP_\\d+)\\b")) %>%     # Extract 'Site' (matches patterns like "EXP_2" or "1_1")
+    distinct(Filename, .keep_all = TRUE) %>%      # Have just one video per drop
+    mutate(
+      Time_in_seconds = 10000/FPS, # Convert 20000 to seconds 
+      clip_start_in_seconds = (round(Time_in_seconds - 10)),  # Start 10 seconds before MaxN
+      clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
+    ) %>%
+    glimpse()
+  
+  ##9.0 Setup output folder and path for representative videos
+  #Ensure the output directory exists
+  output_dir_rep <- "R:/TAFI/Data/CERF/BRUVS Video/202107_Freycinet/Representative Videos/Clips"
+
+  if (!dir.exists(output_dir_rep)) {
+    dir.create(output_dir_rep, recursive = TRUE)
+  }
+  
+  ##10.0 Iterate over each row of 'combined_sec' to process the video clips
+  for (i in 1:nrow(combined_sec)) {
+    
+    # Get the video file path and name
+    video_file <- combined_sec$Filename[i]
+    video_full_path <- file.path(video_dir, video_file)  # Correct path construction
+    
+    # Check if the file exists (to avoid errors)
+    if (!file.exists(video_full_path)) {
+      cat("File not found:", video_full_path, "\n")
+      next  # Skip to next iteration if file doesn't exist
+    }
+    
+    # Get the start time for the clip
+    clip_start_time <- combined_sec$clip_start_in_seconds[i]
+    
+    # Generate the output video file name using the format: Filename_Time.mp4
+    clean_video_file <- gsub("\\.MP4", "", video_file)  # Remove ".MP4" from the filename
+    
+    # Use Time to ensure a unique filename
+    output_video_name <- paste0(campaign, "_", clean_video_file, "_", "representative_",round(combined_sec$Time[i], 2), ".MP4")
+    output_video_path <- file.path(output_dir_rep, output_video_name)
+    
+    # Create the FFmpeg command for video clip extraction
+    ffmpeg_command <- paste0(
+      "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",  # Input video file
+      " -ss ", clip_start_time,               # Start time for the clip
+      " -an ",                              # Exclude audio
+      " -t 30 ",                              # Duration of the clip (30 seconds)
+      " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings
+      "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
+    )
+    
+    # Execute the FFmpeg command and capture the output
+    cat("Running: ", ffmpeg_command, "\n")
+    ffmpeg_output <- system(ffmpeg_command, intern = TRUE)
+    
+    # Print the ffmpeg output for debugging
+    cat(ffmpeg_output, sep = "\n")
+    
+    # Check if the output file was created and has a valid size
+    if (file.exists(output_video_path) && file.info(output_video_path)$size > 1024) {
+      cat("Successfully created:", output_video_path, "\n")
+    } else {
+      cat("Failed to create a valid output file:", output_video_path, "\n")
+    }
+  }
+  
+  
+  ##10.0 Now lets extract habitat image 3 mins into bottom time in based on PeriodTime videos from GoPros. 
+  ###10.1 Set up number of frames into the video you want and convert to seconds
+  combined_hab <- read.table("EM_Data/EM Outputs/GlobalArchive/Freycinet_202108_Period.txt", 
+                             header = TRUE, 
+                             sep = "\t")%>%
+    
+    dplyr::filter(PeriodIndex == 0)%>%#str_detect(Period, regex("bot", ignore_case = TRUE))) %>% # Filter based on bottom time #May need to change
+    mutate(Site = OpCode)%>%#str_extract(Filename, "\\b(?:\\d+_\\d+|EXP_\\d+)\\b")) %>%     # Extract 'Site' (matches patterns like "EXP_2" or "1_1")
+    distinct(Site, .keep_all = TRUE) %>%      # Have just one video per drop
+    mutate(
+      clip_start_in_seconds = (TimeStart*60)+180, # take a image @ 3mins into bottom time 
+      # clip_start_in_seconds = (round(Time_in_seconds )),  # Start 10 seconds before MaxN
+      clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
+    ) %>%
+    glimpse()
+  
+  
+  unique(combined_hab$Site )
+  
+  ##9.0 Setup output folder and path for representative videos
+  #Ensure the output directory exists
+  output_dir_rep <- "R:/TAFI/Data/CERF/BRUVS Video/202107_Freycinet/Representative Videos/Clips"
+  
+  if (!dir.exists(output_dir_rep)) {
+    dir.create(output_dir_rep, recursive = TRUE)
+  }
+  
+  ##10.0 Iterate over each row of 'combined_sec' to process the video clips
+  for (i in 1:nrow(combined_sec)) {
+    
+    # Get the video file path and name
+    video_file <- combined_sec$Filename[i]
+    video_full_path <- file.path(video_dir, video_file)  # Correct path construction
+    
+    # Check if the file exists (to avoid errors)
+    if (!file.exists(video_full_path)) {
+      cat("File not found:", video_full_path, "\n")
+      next  # Skip to next iteration if file doesn't exist
+    }
+    
+    # Get the start time for the clip
+    clip_start_time <- combined_sec$clip_start_in_seconds[i]
+    
+    # Generate the output video file name using the format: Filename_Time.mp4
+    clean_video_file <- gsub("\\.MP4", "", video_file)  # Remove ".MP4" from the filename
+    
+    # Use Time to ensure a unique filename
+    output_video_name <- paste0(campaign, "_", clean_video_file, "_", "representative_",round(combined_sec$Time[i], 2), ".MP4")
+    output_video_path <- file.path(output_dir_rep, output_video_name)
+    
+    # Create the FFmpeg command for video clip extraction
+    ffmpeg_command <- paste0(
+      "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",  # Input video file
+      " -ss ", clip_start_time,               # Start time for the clip
+      " -an ",                              # Exclude audio
+      " -t 30 ",                              # Duration of the clip (30 seconds)
+      " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings
+      "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
+    )
+    
+    # Execute the FFmpeg command and capture the output
+    cat("Running: ", ffmpeg_command, "\n")
+    ffmpeg_output <- system(ffmpeg_command, intern = TRUE)
+    
+    # Print the ffmpeg output for debugging
+    cat(ffmpeg_output, sep = "\n")
+    
+    # Check if the output file was created and has a valid size
+    if (file.exists(output_video_path) && file.info(output_video_path)$size > 1024) {
+      cat("Successfully created:", output_video_path, "\n")
+    } else {
+      cat("Failed to create a valid output file:", output_video_path, "\n")
+    }
+  }
+  
+  
