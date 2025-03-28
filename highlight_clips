@@ -157,17 +157,18 @@ Highlights <- Highlights %>%
     clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
   ) %>%
   filter(Comment != " ") %>%                     # Filter out empty Comments
-  mutate(site = str_extract(Filename, "\\d+_\\d+")) %>%  # Extracts "1_1" or similar patterns
+  mutate(site = OpCode) %>%
   glimpse()
 
 ## 11. Join MaxN and video files to get the path
 combined <- as.data.frame(video_files) %>%
   mutate(Filename = str_extract(video_files, "[^/]+$")) %>%
-  mutate(site = str_extract(Filename, "\\d+_\\d+")) %>%  # Extracts "1_1" or similar patterns
+  mutate(site = str_extract(Filename, "(?<=_)(\\d+_\\d+)(?=_)")) %>%  # Extracts "1_1" pattern. Edit as needed
   right_join(meta_mpa, by = "site") %>%             # Right join to ensure all Video parts rows are kept
   dplyr::select(!Filename) %>%
   right_join(Highlights, by = "site")%>%
   glimpse()
+
 
 ## 12. Setup output folder and path for video clips 
 #Ensure the output directory exists
@@ -227,3 +228,23 @@ for (i in 1:nrow(combined)) {
     cat("Failed to create a valid output file:", output_video_path, "\n")
   }
 }
+
+## 15. Format metadata and write out for highlight videos
+# Get highlight video names and match back to metadata
+highlight_files <- list.files(output_dir, pattern = "\\.(MP4)$", full.names = TRUE, ignore.case = TRUE)
+
+# Extract filenames without the path
+highlight_df <- data.frame(Filename.H = basename(highlight_files), stringsAsFactors = FALSE)%>%
+  mutate(site = str_extract(Filename.H, "(?<=_)[A-Z](_\\d+)(?=_)")) %>%  # Extracts "B_23"  # Extracts "B_23" or similar patterns. Edit as needed
+  # mutate(site = str_extract(Filename, "(?<=_)(\\d+_\\d+)(?=_)")) %>%  # Extracts "1_1" pattern. Edit as needed
+  glimpse()
+
+# Combine with combined metadata df
+final.meta<-combined%>%
+  left_join(highlight_df, by= "site")%>%
+  dplyr::select(site:IUCN,Filename.H)%>%
+  rename(filename=Filename.H)%>%
+  mutate(institute=institute)%>%
+  glimpse()
+
+write.csv(final.meta, file = file.path(output_dir, paste0(campaign, "_", "Highlights_Metadata.csv")), row.names = FALSE)
