@@ -200,7 +200,7 @@ for (i in 1:nrow(combined)) {
   }
   
   # Use Time to ensure a unique filename
-  output_video_name <- paste0(,clean_video_file, "_", clean_name, "_", round(combined$Time[i],2), ".MP4")
+  output_video_name <- paste0(clean_video_file, "_", clean_name, "_", round(combined$Time[i],2), ".MP4")
   output_video_path <- file.path(output_dir, output_video_name)
   
   # Create the FFmpeg command for video clip extraction
