@@ -1,7 +1,7 @@
 ## Extracting Video Snippets for Highlight Events in EventMeasure
 
-# This script extracts video snippets for highlight events tagged using "Attribute 9" and plain text "Comment"
-# in species code files within EventMeasure software (https://www.seagis.com.au/event.html).
+# This script extracts video snippets for highlight events tagged using "Attribute 9" and short (<50 characters) plain text description in "Comment" attribute
+# within EventMeasure software (https://www.seagis.com.au/event.html).
 #
 # Authors: jacquomo.monk@utas.edu.au, justin.hulls@utas.edu.au
 #
@@ -22,12 +22,12 @@ library(readxl)
 library(lubridate)
 library(sf)
 
-# 1. Setup Working Directory
+## 1. Setup Working Directory
 folder_path <- choose.dir() # Navigate to the working folder
 setwd(folder_path)
 getwd()
 
-# 2. Define Metadata and Attributes
+## 2. Define Metadata and Attributes
 data.camera_model = "GoPro Hero10" #edit for your cameras
 data.contact.primary ="neville.barrett@utas.edu.au" #add email for your primary contact person
 data.contact.secondary = "jacquomo.monk@utas.edu.au" #add email for your secondary contact person	
@@ -39,7 +39,7 @@ platform = "IMAS_stereoROV" #set this for each platform format should remain the
 campaign = "202408_Beagle_AMP" #set this for each campaign. format should remain the same between uploads
 licence = "Creative Commons by Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) ]" #Set as appropriate 
 
-# 3. Setup Folder Structure
+## 3. Setup Folder Structure
 base_dir <- file.path(campaign)
 folders <- c("Highlight_Video", "MaxN_Video", "Representative_Video")
 for (folder in folders) {
@@ -52,13 +52,12 @@ for (folder in folders) {
   }
 }
 
-# 4. Load Marine Parks Shapefile (CAPAD for Australia)
+## 4. Load Marine Parks Shapefile (CAPAD for Australia)
 mpa_url <- "https://gis.environment.gov.au/gispubmap/rest/services/ogc_services/CAPAD_Marine/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json"
 mpa <- st_read(mpa_url)
-plot(mpa)
 mpa <- st_make_valid(mpa)
 
-# 5. Load Metadata File
+## 5. Load Metadata File
 meta <- read.csv(list.files(pattern = "*.csv")) %>%
   mutate(
     site = opcode,
@@ -84,10 +83,10 @@ meta <- read.csv(list.files(pattern = "*.csv")) %>%
     funder = data.funder,
     grant.no = data.grant_no
   ) %>%
-  select("site", "date_time", "latitude":"grant_no") %>%
+  select("site", "date_time", "latitude":"grant.no") %>%
   glimpse()
 
-# 6. Perform Data Quality Checks
+## 6. Perform Data Quality Checks
 missing_values <- meta %>% summarise(across(everything(), ~ sum(is.na(.)))) %>% pivot_longer(everything(), names_to = "Column", values_to = "Missing_Count")
 print("Missing values per column:")
 print(missing_values)
@@ -102,16 +101,17 @@ if (nrow(duplicates) > 0) {
   print("No duplicate rows found.")
 }
 
-# Convert Metadata to Spatial Points and Assign MPAs
+## 7. Convert Metadata to Spatial Points and Assign MPAs
 meta_sf <- st_as_sf(meta, coords = c("longitude", "latitude"), crs = 4326)
 meta_mpa <- st_join(meta_sf, mpa, left = TRUE) %>%
   mutate(Name = replace_na(NAME, "Open"), IUCN = replace_na(IUCN, "Open")) %>%
-  select(site, date_time, depth, depth.zone, camera_model, contact.primary, contact.secondary, licence, funder, grant_no, Name, IUCN) %>%
+  select(site, date_time, depth, depth.zone, camera_model, contact.primary, contact.secondary, licence, funder, grant.no, Name, IUCN) %>%
+  rename(MPA.name = Name) %>%
   as.data.frame() %>%
-  select(!geometry) %>%
+  select(!c(geometry)) %>%
   glimpse()
 
-# 7. Extract Frame Rates from Video Files
+## 8. Extract Frame Rates from Video Files
 video_dir <- file.path(getwd(), "Converted")
 video_files <- list.files(video_dir, pattern = "\\.(MP4|AVI)$", full.names = TRUE, ignore.case = TRUE)
 
@@ -125,10 +125,105 @@ get_video_fps <- function(video_path) {
 
 fps_table <- data.frame(Video = video_files, FPS = sapply(video_files, get_video_fps)) %>% mutate(Filename = basename(Video)) %>% glimpse()
 
-# 8. Read EventMeasure 3DPoints File for Highlight Events
-file_path <- list.files(pattern = "3DPoints.*\\.txt$", full.names = TRUE)
-if (length(file_path) == 0) {
-  stop("No 3DPoints.txt file found in the directory.")
+## 9. Read EventMeasure 3DPoints File for Highlight Events
+# List files that contain "3DPoints" and end with ".txt". Filter to keep only "highlight" events based on Attribute9 
+file_path <- list.files(pattern = "3DPoints.*\\.txt$", full.names = TRUE) %>%
+  enframe(name = NULL, value = "file_path") %>%
+  filter(str_detect(file_path, "Points.*\\.txt$")) %>%
+  pull(file_path)
+
+# Check if any file was found and read it
+if (length(file_path) > 0) {
+  Highlights <- read_delim(file_path, delim = "\t") %>%
+    filter(!is.na(Attribute9))  # Filter out rows where Attribute9 is NA
+  # View the first few rows of the filtered data
+  head(Highlights)
 } else {
-  message("Found file: ", file_path)
+  cat("No file with 'Points' in the name was found.")
+}
+
+## 10. Format highlights dataframe
+Highlights <- Highlights %>%
+  # mutate(
+  #   Genus = ifelse(Genus == "", Family, Genus), # Replace empty Genus with Family
+  #   Scientific = paste(Genus, Species, sep = " ") # Combine Genus and Species
+  # ) %>%
+  mutate(Filename = FilenameLeft)%>%
+  arrange(Filename, Comment, FrameLeft) %>%          # Sort by Filename, Comment, and Time
+  left_join(fps_table, by= join_by(Filename))%>%
+  mutate(
+    Time_in_seconds = FrameLeft/FPS, # Convert Frames to seconds
+    clip_start_in_seconds = (round(Time_in_seconds - 5)),  # Start 5 seconds before highlight
+    clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
+  ) %>%
+  filter(Comment != " ") %>%                     # Filter out empty Comments
+  mutate(site = str_extract(Filename, "\\d+_\\d+")) %>%  # Extracts "1_1" or similar patterns
+  glimpse()
+
+## 11. Join MaxN and video files to get the path
+combined <- as.data.frame(video_files) %>%
+  mutate(Filename = str_extract(video_files, "[^/]+$")) %>%
+  mutate(site = str_extract(Filename, "\\d+_\\d+")) %>%  # Extracts "1_1" or similar patterns
+  right_join(meta_mpa, by = "site") %>%             # Right join to ensure all Video parts rows are kept
+  dplyr::select(!Filename) %>%
+  right_join(Highlights, by = "site")%>%
+  glimpse()
+
+## 12. Setup output folder and path for video clips 
+#Ensure the output directory exists
+output_dir <- paste(getwd(),campaign,"Highlight_Video", sep= "/")
+output_dir
+
+## 13. Iterate over each row of 'combined' to process the video clips
+for (i in 1:nrow(combined)) {
+  
+  # Get the video file path and name
+  video_file <- combined$Filename[i]
+  video_full_path <- file.path(video_dir, video_file)  # Correct path construction
+  
+  # Check if the file exists (to avoid errors)
+  if (!file.exists(video_full_path)) {
+    cat("File not found:", video_full_path, "\n")
+    next  # Skip to next iteration if file doesn't exist
+  }
+  
+  # Get the start time for the clip
+  clip_start_time <- combined$clip_start_in_seconds[i]
+  
+  # Generate the output video file name using the format: Filename_Comment_Time.mp4
+  clean_video_file <- gsub("\\.[^.]+$", "", video_file)  # Remove video extension from the filename
+  
+  # Ensure Scientific name is clean (remove unwanted characters or NAs)
+  clean_name <- gsub("[^[:alnum:]_]", "_", combined$Comment[i])
+  if (is.na(  clean_name ) |   clean_name  == "") {
+    clean_name  <- "Unknown"
+  }
+  
+  # Use Time to ensure a unique filename
+  output_video_name <- paste0(campaign,"_",clean_video_file, "_", clean_name, "_", round(combined$Time[i],2), ".MP4")
+  output_video_path <- file.path(output_dir, output_video_name)
+  
+  # Create the FFmpeg command for video clip extraction
+  ffmpeg_command <- paste0(
+    "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",  # Input video file
+    " -ss ", clip_start_time,               # Start time for the clip
+    " -an ",                              # Exclude audio
+    " -t 30 ",                              # Duration of the clip (30 seconds)
+    " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings cf ranges from 0-51 with lower better. 17-18 is visually lossless, but large file size. 19-23 good for most general uses
+    "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
+  )
+  
+  # Execute the FFmpeg command and capture the output
+  cat("Running: ", ffmpeg_command, "\n")
+  ffmpeg_output <- system(ffmpeg_command, intern = TRUE)
+  
+  # Print the ffmpeg output for debugging
+  cat(ffmpeg_output, sep = "\n")
+  
+  # Check if the output file was created and has a valid size
+  if (file.exists(output_video_path) && file.info(output_video_path)$size > 1024) {
+    cat("Successfully created:", output_video_path, "\n")
+  } else {
+    cat("Failed to create a valid output file:", output_video_path, "\n")
+  }
 }
