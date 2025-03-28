@@ -1,8 +1,7 @@
 Creating short promotional clips from BRUV imagery annotated in Eventment Measure for Seamap Australia
 Written by jacquomo.monk@utas.edu.au and Justin.Hulls@utas.edu.au
 
-This code assumes you have a folder containing all video files in a directory called "Converted", "\\Points.txt","\\3DPoints.txt" and "\\Period.txt" files from Eventmeasure and one "\\Metadata.csv" file that is structured based on GlobalArchive standards found in the CheckEM user guide https://marine-ecology.shinyapps.io/CheckEM/
-Example data is provided in 202106_Huon_AMP_BRUV.zip in this repo
+This code assumes you have a folder containing all video files in a directory called "Converted". It also requires the following databased export files from EventMeasure: "\\Points.txt","\\3DPoints.txt" and "\\Period.txt" and one "\\Metadata.csv" file that is structured based on GlobalArchive standards found in the CheckEM user guide https://marine-ecology.shinyapps.io/CheckEM/
 
 To transfer videos to IMAS for ingestion into Seamap Australia 
 Use this transfer token: https://www.dropbox.com/scl/fo/l666jkpkvu4mv9ha3bgs4/AHmNvZiwVpzRAY8mC_-Iuug?rlkey=okjgls12zd4tgnlcyyg8szk6r&st=qb852lh4&dl=0
