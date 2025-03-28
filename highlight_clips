@@ -9,8 +9,7 @@
 # - A folder containing all BRUV video files in a directory named "Converted".
 # - A database export from EventMeasure with the following files in the working directory:
 #   - "\3DPoints.txt"
-#   - "\Period.txt"
-# - A "\Metadata.csv" file structured according to GlobalArchive standards (see: https://marine-ecology.shinyapps.io/CheckEM/).
+#   - "\Metadata.csv" file structured according to GlobalArchive standards (see: https://marine-ecology.shinyapps.io/CheckEM/).
 # - FFmpeg installed (https://www.ffmpeg.org/download.html).
 
 # Clean up environment
