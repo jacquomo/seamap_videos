@@ -163,7 +163,7 @@ MaxN <- Points %>%
     clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
   ) %>%
   filter(!Scientific %in% c(" ","NA NA")) %>%                     # Filter out empty scientific names
-  mutate(site=OpCode)%>%
+  rename(site=OpCode)%>%
   glimpse()
 
   
