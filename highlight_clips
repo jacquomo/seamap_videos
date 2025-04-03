@@ -156,7 +156,7 @@ Highlights <- Highlights %>%
     clip_start_in_seconds = ifelse(clip_start_in_seconds < 0, 0, clip_start_in_seconds) # Prevent negative times
   ) %>%
   filter(Comment != " ") %>%                     # Filter out empty Comments
-  mutate(site = OpCode) %>%
+  rename(site = OpCode) %>%
   glimpse()
 
 ## 11. Join MaxN and video files to get the path
@@ -241,7 +241,7 @@ highlight_df <- data.frame(Filename.H = basename(highlight_files), stringsAsFact
 # Combine with combined metadata df
 final.meta<-combined%>%
   left_join(highlight_df, by= "site")%>%
-  dplyr::select(site:IUCN,Filename.H)%>%
+  dplyr::select(site,Comment:IUCN,Filename.H)%>%
   rename(filename=Filename.H)%>%
   mutate(institute=institute)%>%
   glimpse()
