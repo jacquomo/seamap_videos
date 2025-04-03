@@ -250,7 +250,7 @@ maxn_df <- data.frame(Filename.H = basename(maxn_files), stringsAsFactors = FALS
 # Combine with combined metadata df
 final.meta<-combined%>%
   left_join(maxn_df, by= "site")%>%
-  dplyr::select(site:IUCN,Filename.H)%>%
+  dplyr::select(site,Scientific:IUCN,Filename.H)%>%
   rename(filename=Filename.H)%>%
   mutate(institute=institute)%>%
   glimpse()
