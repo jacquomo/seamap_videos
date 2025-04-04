@@ -200,6 +200,8 @@ for (i in 1:nrow(combined)) {
     " -an ",                              # Exclude audio
     " -t 30 ",                              # Duration of the clip (30 seconds)
     " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings cf ranges from 0-51 with lower better. 17-18 is visually lossless, but large file size. 19-23 good for most general uses
+    " -profile:v high -level 4.2 ", #improves compatibility with web players
+    " -movflags +faststart ", #places metadata at the beginning for faster playback
     "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
   )
   
