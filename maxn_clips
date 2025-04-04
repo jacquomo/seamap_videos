@@ -219,6 +219,8 @@ for (i in 1:nrow(combined)) {
     " -an ",                              # Exclude audio
     " -t 30 ",                              # Duration of the clip (30 seconds). Change as needed
     " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings
+    " -profile:v high -level 4.2 ", #improves compatibility with web players
+    " -movflags +faststart ", #places metadata at the beginning for faster playback
     "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
   )
   
