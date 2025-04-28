@@ -36,7 +36,7 @@ data.grant_no  = "DNP-MPA-2122-062" #(optional) add relevant grant numbers. If m
 institute = "IMAS" #set this for your institute. should remain the same between uploads
 platform = "IMAS_stereoROV" #set this for each platform format should remain the same between uploads 
 campaign = "202408_Beagle_AMP" #set this for each campaign. format should remain the same between uploads
-licence = "Creative Commons by Attribution-ShareAlike 4.0 International (CC BY-SA 4.0) ]" #Set as appropriate 
+licence = "Creative Commons by Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)" #Set as appropriate 
 
 ## 3. Setup Folder Structure
 base_dir <- file.path(campaign)
