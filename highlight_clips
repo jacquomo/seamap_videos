@@ -52,9 +52,9 @@ for (folder in folders) {
 }
 
 ## 4. Load Marine Parks Shapefile (CAPAD for Australia)
-mpa_url <- "https://gis.environment.gov.au/gispubmap/rest/services/ogc_services/CAPAD_Marine/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=json"
+mpa_url <- "https://geoserver.imas.utas.edu.au/geoserver/seamap/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=seamap%3ASeamapAus_BOUNDARIES_CAPAD&outputFormat=application%2Fjson"
 mpa <- st_read(mpa_url)
-mpa <- st_make_valid(mpa)
+mpa <- mpa[st_is_valid(mpa), ]
 
 ## 5. Load Metadata File
 meta <- read.csv(list.files(pattern = "*.csv")) %>%
