@@ -8,7 +8,7 @@ This repo contains three code files that produce consistently formated video cli
 - maxn_clips extracts video snippets at MaxN events based on EventMeasure exports  (requires "\\Metadata.csv" and "\\Points.txt")
 - representative_clips extracts representative video snippets based on EventMeasure exports  (requires "\\Metadata.csv" and "\\Period.txt")
 
-Once exported, use this token to transfer videos for ingestion into Seamap Australia: https://www.dropbox.com/scl/fo/l666jkpkvu4mv9ha3bgs4/AHmNvZiwVpzRAY8mC_-Iuug?rlkey=okjgls12zd4tgnlcyyg8szk6r&st=qb852lh4&dl=0
+Once exported, use this token to transfer videos for ingestion into Seamap Australia: [[[https://www.dropbox.com/scl/fo/l666jkpkvu4mv9ha3bgs4/AHmNvZiwVpzRAY8mC_-Iuug?rlkey=okjgls12zd4tgnlcyyg8szk6r&st=qb852lh4&dl=0](https://www.dropbox.com/request/CKLcIekGzVEoMB620k4Y)](https://www.dropbox.com/request/CKLcIekGzVEoMB620k4Y)](https://www.dropbox.com/request/CKLcIekGzVEoMB620k4Y)
 
 Reporting Issues:
 If you encounter any errors or issues with the R code, please report them to jacquomo.monk@utas.edu.au.
