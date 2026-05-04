@@ -261,15 +261,15 @@ rep_files <- list.files(output_dir, pattern = "\\.(MP4)$", full.names = TRUE, ig
 
 # Extract filenames without the path
 rep_df <- data.frame(Filename.H = basename(rep_files), stringsAsFactors = FALSE)%>%
-  mutate(site = str_extract(Filename.H, "(?<=_)[A-Z](_\\d+)(?=_)")) %>%  # Extracts "B_23"  # Extracts "B_23" or similar patterns. Edit as needed
-  # mutate(site = str_extract(Filename, "(?<=_)(\\d+_\\d+)(?=_)")) %>%  # Extracts "1_1" pattern. Edit as needed
+  # mutate(site = str_extract(Filename.H, "(?<=_)[A-Z](_\\d+)(?=_)")) %>%  # Extracts "B_23"  # Extracts "B_23" or similar patterns. Edit as needed
+  mutate(site = paste("B",str_extract(Filename.H, "(?<=_)(\\d+_\\d+)(?=_)"), sep = "_")) %>%  # Extracts "1_1" pattern. Edit as needed. Change "B" to what you need
   glimpse()
 
 # Combine with combined metadata df
 final.meta<-combined%>%
   left_join(rep_df, by= "site")%>%
   dplyr::select(site:IUCN,Filename.H)%>%
-  rename(filename=Filename.H)%>%
+  # rename(filename=Filename.H)%>%
   mutate(institute=institute)%>%
   glimpse()
 
