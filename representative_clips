@@ -127,7 +127,7 @@ fps_table <- data.frame(Video = video_files, FPS = sapply(video_files, get_video
 
 ## 9. Read EventMeasure Period File for Representative Events
 # List files that contain "Period" and end with ".txt".
-file_path <- list.files(pattern = "Period.*\\.txt$", full.names = TRUE) %>%
+file_path <- list.files(pattern = "Period.*\\.txt$", full.names = TRUE,  recursive = TRUE) %>%
   enframe(name = NULL, value = "file_path") %>%
   pull(file_path)
 
