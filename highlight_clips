@@ -127,7 +127,7 @@ fps_table <- data.frame(Video = video_files, FPS = sapply(video_files, get_video
 
 ## 9. Read EventMeasure 3DPoints File for Highlight Events
 # List files that contain "3DPoints" and end with ".txt". Filter to keep only "highlight" events based on Attribute9 
-file_path <- list.files(pattern = "3DPoints.*\\.txt$", full.names = TRUE) %>%
+file_path <- list.files(pattern = "3DPoints.*\\.txt$", full.names = TRUE,  recursive = TRUE) %>%
   enframe(name = NULL, value = "file_path") %>%
   filter(str_detect(file_path, "Points.*\\.txt$")) %>%
   pull(file_path)
