@@ -141,7 +141,7 @@ if (length(file_path) > 0) {
 
 ## 10. Format start time to set extraction time point based on frame
 Period.df <- Periods %>%#----
-  dplyr::filter(PeriodIndex == 0)%>%#str_detect(Period, regex("bot", ignore_case = TRUE))) %>% # Filter based on bottom time #May need to change
+dplyr::filter(PeriodIndex == 0)%>%#str_detect(Period, regex("bot", ignore_case = TRUE))) %>% # Filter based on bottom time #May need to change
   mutate(site = OpCode)%>%#str_extract(Filename, "\\b(?:\\d+_\\d+|EXP_\\d+)\\b")) %>%     # Extract 'Site' (matches patterns like "EXP_2" or "1_1")
   distinct(site, .keep_all = TRUE) %>%      # Have just one video per drop
   mutate(
@@ -172,52 +172,86 @@ if (!dir.exists(output_dir_rep)) {
 }
 
 ## 13. Iterate over each row of 'combined' to process the video clips
+#get video duration helper
+get_video_duration <- function(video_path) {
+  command <- paste(
+    "ffprobe -v error -show_entries format=duration",
+    "-of default=noprint_wrappers=1:nokey=1",
+    shQuote(video_path)
+  )
+  as.numeric(system(command, intern = TRUE))
+}
+
+#Loop through
+
 for (i in 1:nrow(combined)) {
   
-  # Get the video file path and name
   video_file <- combined$FilenameStart[i]
-  video_full_path <- file.path(video_dir, video_file)  # Correct path construction
+  video_full_path <- file.path(video_dir, video_file)
   
-  # Check if the file exists (to avoid errors)
   if (!file.exists(video_full_path)) {
     cat("File not found:", video_full_path, "\n")
-    next  # Skip to next iteration if file doesn't exist
+    next
   }
   
-  # Get the start time for the clip
   clip_start_time <- combined$clip_start_in_seconds[i]
   
-  # Generate the output video file name using the format: Filename_Comment_Time.mp4
-  clean_video_file <- gsub("\\.[^.]+$", "", video_file)  # Remove video extension from the filename
+  # Get duration of first video
+  vid_duration <- get_video_duration(video_full_path)
+  remaining_time <- vid_duration - clip_start_time
   
-  # Use Time to ensure a unique filename
-  output_video_name <- paste0(clean_video_file, "_representative_", round(combined$TimeStart[i],2), ".MP4")
-  output_video_path <- file.path(output_dir, output_video_name)
+  use_second_video <- remaining_time < 30
   
-  # Create the FFmpeg command for video clip extraction
-  ffmpeg_command <- paste0(
-    "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",  # Input video file
-    " -ss ", clip_start_time,               # Start time for the clip
-    " -an ",                              # Exclude audio
-    " -t 30 ",                              # Duration of the clip (30 seconds)
-    " -c:v libx264 -preset veryfast -crf 23 ",   # Compression settings cf ranges from 0-51 with lower better. 17-18 is visually lossless, but large file size. 19-23 good for most general uses
-    " -profile:v high -level 4.2 ", #improves compatibility with web players
-    " -movflags +faststart ", #places metadata at the beginning for faster playback
-    "\"", normalizePath(output_video_path, winslash = "/"), "\""  # Output video file path
+  # If not enough time, switch to _2.MP4
+  if (use_second_video) {
+    
+    video_file_2 <- sub("_1\\.MP4$", "_2.MP4", video_file)
+    video_full_path_2 <- file.path(video_dir, video_file_2)
+    
+    if (file.exists(video_full_path_2)) {
+      cat("Switching to second video:", video_file_2, "\n")
+      
+      # Start at beginning of second video
+      video_full_path <- video_full_path_2
+      clip_start_time <- 0
+      
+    } else {
+      cat("Second video not found, skipping:", video_file_2, "\n")
+      next
+    }
+  }
+  
+  clean_video_file <- gsub("\\.[^.]+$", "", basename(video_full_path))
+  
+  output_video_name <- paste0(
+    clean_video_file,
+    "_representative_",
+    round(combined$TimeStart[i], 2),
+    ".MP4"
   )
   
-  # Execute the FFmpeg command and capture the output
+  output_video_path <- file.path(output_dir, output_video_name)
+  
+  ffmpeg_command <- paste0(
+    "ffmpeg -i \"", normalizePath(video_full_path, winslash = "/"), "\"",
+    " -ss ", clip_start_time,
+    " -an ",
+    " -t 30 ",
+    " -c:v libx264 -preset veryfast -crf 23 ",
+    " -profile:v high -level 4.2 ",
+    " -movflags +faststart ",
+    "\"", normalizePath(output_video_path, winslash = "/"), "\""
+  )
+  
   cat("Running: ", ffmpeg_command, "\n")
   ffmpeg_output <- system(ffmpeg_command, intern = TRUE)
   
-  # Print the ffmpeg output for debugging
   cat(ffmpeg_output, sep = "\n")
   
-  # Check if the output file was created and has a valid size
   if (file.exists(output_video_path) && file.info(output_video_path)$size > 1024) {
     cat("Successfully created:", output_video_path, "\n")
   } else {
-    cat("Failed to create a valid output file:", output_video_path, "\n")
+    cat("Failed to create:", output_video_path, "\n")
   }
 }
 
