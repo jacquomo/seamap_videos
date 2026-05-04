@@ -104,10 +104,10 @@ if (nrow(duplicates) > 0) {
 
 ## 7. Convert Metadata to Spatial Points and Assign MPAs
 sf::sf_use_s2(FALSE)  # <-- key fix as CAPAD has some messy polygons (duplicate vertices, self-intersections), and s2 is stricter than GEOS.
-meta_sf <- st_as_sf(meta, coords = c("longitude", "latitude"), crs = 4326)
+meta_sf <- st_as_sf(meta, coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
 meta_mpa <- st_join(meta_sf, mpa, left = TRUE) %>%
   mutate(Name = replace_na(NAME, "Open"), IUCN = replace_na(IUCN, "Open")) %>%
-  select(site, date_time, depth, depth.zone, camera_model, contact.primary, contact.secondary, licence, funder, grant.no, Name, IUCN) %>%
+  select(site, date_time,longitude, latitude, depth, depth.zone, camera_model, contact.primary, contact.secondary, licence, funder, grant.no, Name, IUCN) %>%
   rename(MPA.name = Name) %>%
   as.data.frame() %>%
   select(!c(geometry)) %>%
