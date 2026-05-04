@@ -129,7 +129,7 @@ fps_table <- data.frame(Video = video_files, FPS = sapply(video_files, get_video
 
 ## 9. Read EventMeasure Points File for MaxN Events
 # List files that contain "Points" and end with ".txt".
-file_path <- list.files(pattern = "Points.*\\.txt$", full.names = TRUE) %>%
+file_path <- list.files(pattern = "Points.*\\.txt$", full.names = TRUE,  recursive = TRUE) %>%
   enframe(name = NULL, value = "file_path") %>%
   filter(str_detect(file_path, "_Points.*\\.txt$")) %>% #get rid of 3D points if these are in the same file
   pull(file_path)
